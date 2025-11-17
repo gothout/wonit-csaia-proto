@@ -68,7 +68,12 @@ func (c *Client) SendMessage(ctx context.Context, payload *SendMessageRequest) e
 		return fmt.Errorf("marshal csa payload: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/api/integration/whatsapp/%s/send", defaultCSAURL, c.cfg.WebhookID)
+	baseURL := c.cfg.URL
+	if baseURL == "" {
+		baseURL = defaultCSAURL
+	}
+
+	url := fmt.Sprintf("%s/api/integration/whatsapp/%s/send", baseURL, c.cfg.WebhookID)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
