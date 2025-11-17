@@ -15,6 +15,8 @@ type CSAConfig struct {
 	URL       string `json:"url"`
 	WebhookID string `json:"webhook_id"`
 	Token     string `json:"token"`
+
+	InsecureSkipVerify bool `json:"insecure_skip_verify"`
 }
 
 type ChatvoltConfig struct {

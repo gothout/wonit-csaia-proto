@@ -3,6 +3,7 @@ package csa
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -25,8 +26,13 @@ type Client struct {
 }
 
 func NewClient(cfg config.CSAConfig) *Client {
+	transport := &http.Transport{}
+	if cfg.InsecureSkipVerify {
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} // nolint:gosec // configurado pelo usuário
+	}
+
 	return &Client{
-		httpClient: &http.Client{Timeout: 15 * time.Second},
+		httpClient: &http.Client{Timeout: 15 * time.Second, Transport: transport},
 		cfg:        cfg,
 	}
 }
