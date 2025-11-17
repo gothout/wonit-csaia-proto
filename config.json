@@ -1,0 +1,17 @@
+{
+  "server": {
+    "port": 8080,
+    "host": "localhost"
+  },
+  "csa": {
+    "url": "https://csa.wonit.net.br",
+    "webhook_id": "e944e55d-b7d1-4dae-a4ee-af47eb84b3ab",
+    "token": "api_xkGNK0CteUznw1ItoZY0kn1gbN0Arx8RC4vqPbgXDDw"
+  },
+  "ia": {
+    "chatvolt": {
+      "token": "8fab7c69-0c49-4feb-87e5-5903e0794c62",
+      "agent_id": "cmhyvd37i00921064qj925i7v"
+    }
+  }
+}

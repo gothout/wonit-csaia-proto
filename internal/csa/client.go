@@ -81,7 +81,7 @@ func (c *Client) SendMessage(ctx context.Context, payload *SendMessageRequest) e
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("accept", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.cfg.Token)
+	req.Header.Set("Authorization", c.cfg.Token)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
