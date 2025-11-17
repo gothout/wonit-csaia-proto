@@ -19,10 +19,11 @@ type Handler struct {
 	chatvolt *chatvolt.Client
 	sessions *session.Manager
 	outbox   *queue.Outbox
+	jobs     *queue.JobManager
 }
 
-func NewHandler(cv *chatvolt.Client, sm *session.Manager, out *queue.Outbox) *Handler {
-	return &Handler{chatvolt: cv, sessions: sm, outbox: out}
+func NewHandler(cv *chatvolt.Client, sm *session.Manager, out *queue.Outbox, jm *queue.JobManager) *Handler {
+	return &Handler{chatvolt: cv, sessions: sm, outbox: out, jobs: jm}
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -35,6 +36,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		log.Printf("[webhook] erro lendo payload: %v", err)
 		http.Error(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+
+	if strings.EqualFold(payload.Event, "status") {
+		h.handleStatusWebhook(payload)
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 
@@ -96,4 +103,23 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	})
 
 	w.WriteHeader(http.StatusAccepted)
+}
+
+func (h *Handler) handleStatusWebhook(payload model.InboundWebhook) {
+	if h.jobs == nil {
+		return
+	}
+
+	messageID := strings.TrimSpace(payload.MessageID)
+	if messageID == "" {
+		messageID = strings.TrimSpace(payload.PlatformMessageID)
+	}
+	status := queue.JobStatus(payload.Status)
+
+	phone := strings.TrimSpace(payload.To)
+	if phone == "" {
+		phone = strings.TrimSpace(payload.From)
+	}
+
+	h.jobs.UpsertStatus(messageID, status, phone, payload.ConversationID)
 }

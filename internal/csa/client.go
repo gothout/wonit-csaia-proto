@@ -48,7 +48,12 @@ type SendMessageRequest struct {
 	URL         string `json:"url,omitempty"`
 }
 
-func (c *Client) SendMessage(ctx context.Context, payload *SendMessageRequest) error {
+type SendMessageResponse struct {
+	Status    string `json:"status"`
+	MessageID string `json:"messageId"`
+}
+
+func (c *Client) SendMessage(ctx context.Context, payload *SendMessageRequest) (*SendMessageResponse, error) {
 	// Defaults
 	if payload.InstanceID == "" {
 		payload.InstanceID = defaultInstanceID
@@ -65,7 +70,7 @@ func (c *Client) SendMessage(ctx context.Context, payload *SendMessageRequest) e
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("marshal csa payload: %w", err)
+		return nil, fmt.Errorf("marshal csa payload: %w", err)
 	}
 
 	baseURL := c.cfg.URL
@@ -77,7 +82,7 @@ func (c *Client) SendMessage(ctx context.Context, payload *SendMessageRequest) e
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("new csa request: %w", err)
+		return nil, fmt.Errorf("new csa request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("accept", "application/json")
@@ -85,15 +90,20 @@ func (c *Client) SendMessage(ctx context.Context, payload *SendMessageRequest) e
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("call csa: %w", err)
+		return nil, fmt.Errorf("call csa: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 300 {
 		var raw map[string]interface{}
 		_ = json.NewDecoder(resp.Body).Decode(&raw)
-		return fmt.Errorf("csa error: status=%d body=%v", resp.StatusCode, raw)
+		return nil, fmt.Errorf("csa error: status=%d body=%v", resp.StatusCode, raw)
 	}
 
-	return nil
+	var data SendMessageResponse
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return nil, fmt.Errorf("decode csa response: %w", err)
+	}
+
+	return &data, nil
 }

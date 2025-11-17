@@ -22,6 +22,7 @@ type OutboxJob struct {
 type Outbox struct {
 	csa     *csa.Client
 	workers int
+	jobs    *JobManager
 
 	queue    *goqueue.Queue[OutboxJob]
 	notify   chan struct{}
@@ -30,7 +31,7 @@ type Outbox struct {
 }
 
 // NewOutbox cria a fila e inicializa os canais.
-func NewOutbox(csaClient *csa.Client, workers int) *Outbox {
+func NewOutbox(csaClient *csa.Client, workers int, jobManager *JobManager) *Outbox {
 	if workers <= 0 {
 		workers = 3
 	}
@@ -38,6 +39,7 @@ func NewOutbox(csaClient *csa.Client, workers int) *Outbox {
 	return &Outbox{
 		csa:      csaClient,
 		workers:  workers,
+		jobs:     jobManager,
 		queue:    goqueue.NewQueue[OutboxJob](100),
 		notify:   make(chan struct{}, 1),
 		shutdown: make(chan struct{}),
@@ -93,7 +95,7 @@ func (o *Outbox) worker(id int) {
 				}
 
 				ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-				err := o.csa.SendMessage(ctx, &csa.SendMessageRequest{
+				resp, err := o.csa.SendMessage(ctx, &csa.SendMessageRequest{
 					Destination: job.Phone,
 					Text:        job.Text,
 					Type:        "text",
@@ -104,6 +106,14 @@ func (o *Outbox) worker(id int) {
 				if err != nil {
 					log.Printf("[outbox-worker-%d] erro enviando para %s (conv %s): %v", id, job.Phone, job.ConversationID, err)
 					continue
+				}
+
+				if o.jobs != nil && resp != nil {
+					status := JobStatus(resp.Status)
+					if status == "" {
+						status = JobStatusSubmitted
+					}
+					o.jobs.UpsertStatus(resp.MessageID, status, job.Phone, job.ConversationID)
 				}
 
 				log.Printf("[outbox-worker-%d] mensagem enviada para %s (conv %s)", id, job.Phone, job.ConversationID)

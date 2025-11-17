@@ -32,14 +32,16 @@ func main() {
 	csaClient := csa.NewClient(cfg.CSA)
 	chatvoltClient := chatvolt.NewClient(cfg.IA.Chatvolt)
 	sessionManager := session.NewManager(10 * time.Minute)
+	jobManager := queue.NewJobManager()
 
-	outbox := queue.NewOutbox(csaClient, *workers)
+	outbox := queue.NewOutbox(csaClient, *workers, jobManager)
 	outbox.Start()
 
-	handler := whatsapp.NewHandler(chatvoltClient, sessionManager, outbox)
+	handler := whatsapp.NewHandler(chatvoltClient, sessionManager, outbox, jobManager)
 
 	mux := http.NewServeMux()
 	mux.Handle("/whatsapp/webhook", handler)
+	mux.Handle("/jobs/", queue.NewJobStatusHandler(jobManager))
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
