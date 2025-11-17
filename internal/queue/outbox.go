@@ -6,52 +6,42 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gothout/goqueue" // TODO: conferir nome do módulo e import path real
-
 	"whatsapp-ia-integrator/internal/csa"
 )
 
-// OutboxJob é o que vai para a fila.
+// OutboxJob é o item colocado na fila para envio à CSA.
 type OutboxJob struct {
-	Phone          string // número do cliente
-	ConversationID string // conversationId do Chatvolt (ticket)
+	Phone          string
+	ConversationID string
 	Text           string
 }
 
-// Outbox encapsula a fila + workers que consomem e enviam pra CSA.
+// Outbox é uma fila simples de saída com workers concorrentes.
 type Outbox struct {
-	wg      sync.WaitGroup
 	csa     *csa.Client
 	workers int
 
-	// fila goqueue
-	queue *goqueue.Queue // TODO: trocar pelo tipo certo da tua lib (genérico, interface, etc.)
+	jobs chan OutboxJob
+	wg   sync.WaitGroup
 
 	shutdown chan struct{}
 }
 
-// NewOutbox cria a fila e prepara os workers.
-// buffer aqui é ignorado porque quem manda no buffer é a implementação da goqueue.
+// NewOutbox cria a fila e inicializa os canais.
 func NewOutbox(csaClient *csa.Client, workers int) *Outbox {
 	if workers <= 0 {
 		workers = 3
 	}
 
-	// TODO: ajustar para a API de criação da fila:
-	// algo como:
-	//   q := goqueue.New()        // se for ilimitada
-	//   q := goqueue.New(100)     // se precisar informar capacidade
-	q := goqueue.New() // PLACEHOLDER – AJUSTAR
-
 	return &Outbox{
 		csa:      csaClient,
 		workers:  workers,
-		queue:    q,
+		jobs:     make(chan OutboxJob, 100),
 		shutdown: make(chan struct{}),
 	}
 }
 
-// Start sobe os workers que vão ficar dando Get() / Pop() na fila.
+// Start dispara os workers de consumo.
 func (o *Outbox) Start() {
 	for i := 0; i < o.workers; i++ {
 		o.wg.Add(1)
@@ -59,7 +49,22 @@ func (o *Outbox) Start() {
 	}
 }
 
-// worker é quem consome da fila e chama a CSA.
+// Stop sinaliza shutdown e aguarda workers terminarem.
+func (o *Outbox) Stop() {
+	close(o.shutdown)
+	close(o.jobs)
+	o.wg.Wait()
+}
+
+// Enqueue adiciona um job na fila.
+func (o *Outbox) Enqueue(job OutboxJob) {
+	select {
+	case o.jobs <- job:
+	default:
+		log.Printf("[outbox] fila cheia, descartando mensagem para %s", job.Phone)
+	}
+}
+
 func (o *Outbox) worker(id int) {
 	defer o.wg.Done()
 
@@ -68,21 +73,10 @@ func (o *Outbox) worker(id int) {
 		case <-o.shutdown:
 			log.Printf("[outbox-worker-%d] encerrando", id)
 			return
-		default:
-			// TODO: ajustar para a API real do goqueue.
-			// Exemplo se for algo tipo:
-			//   item := o.queue.Get()
-			//   job := item.(OutboxJob)
-			item := o.queue.Pop() // PLACEHOLDER – AJUSTAR NOME/ASSINATURA
-			if item == nil {
-				time.Sleep(50 * time.Millisecond)
-				continue
-			}
-
-			job, ok := item.(OutboxJob)
+		case job, ok := <-o.jobs:
 			if !ok {
-				log.Printf("[outbox-worker-%d] item de tipo inesperado: %#v", id, item)
-				continue
+				log.Printf("[outbox-worker-%d] canal fechado", id)
+				return
 			}
 
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -91,4 +85,15 @@ func (o *Outbox) worker(id int) {
 				Text:        job.Text,
 				Type:        "text",
 				Preview:     true,
-			// InstanceID/Product/Provider/Name vêm por default no c
+			})
+			cancel()
+
+			if err != nil {
+				log.Printf("[outbox-worker-%d] erro enviando para %s (conv %s): %v", id, job.Phone, job.ConversationID, err)
+				continue
+			}
+
+			log.Printf("[outbox-worker-%d] mensagem enviada para %s (conv %s)", id, job.Phone, job.ConversationID)
+		}
+	}
+}

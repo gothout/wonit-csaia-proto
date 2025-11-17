@@ -12,6 +12,7 @@ type ServerConfig struct {
 }
 
 type CSAConfig struct {
+	URL       string `json:"url"`
 	WebhookID string `json:"webhook_id"`
 	Token     string `json:"token"`
 }
@@ -48,6 +49,10 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.Server.Host == "" {
 		cfg.Server.Host = "0.0.0.0"
+	}
+
+	if cfg.CSA.URL == "" {
+		cfg.CSA.URL = "https://csa.wonit.net.br"
 	}
 
 	return &cfg, nil
