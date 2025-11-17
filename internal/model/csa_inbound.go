@@ -4,12 +4,15 @@ package model
 type InboundWebhook struct {
 	Channel           string            `json:"channel"`
 	Event             string            `json:"event"`
+	MessageID         string            `json:"messageId"`
 	PlatformMessageID string            `json:"platformMessageId"`
 	PlatformID        string            `json:"platformId"`
 	From              string            `json:"from"`
 	To                string            `json:"to"`
 	Type              string            `json:"type"`
+	Status            string            `json:"status"`
 	MessageText       string            `json:"messageText"`
+	ConversationID    string            `json:"conversationId"`
 	Timestamp         int64             `json:"timestamp"`
 	RawPayload        map[string]any    `json:"rawPayload,omitempty"`
 	RawContact        map[string]string `json:"contact,omitempty"`
