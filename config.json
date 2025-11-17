@@ -1,7 +1,7 @@
 {
   "server": {
-    "port": 8080,
-    "host": "localhost"
+    "port": 80,
+    "host": "0.0.0.0"
   },
   "csa": {
     "url": "https://csa.wonit.net.br",
