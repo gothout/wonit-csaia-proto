@@ -71,5 +71,6 @@ func main() {
 		log.Printf("erro encerrando servidor: %v", err)
 	}
 
+	sessionManager.Stop()
 	outbox.Stop()
 }

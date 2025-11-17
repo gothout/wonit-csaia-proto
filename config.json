@@ -6,7 +6,8 @@
   "csa": {
     "url": "https://csa.wonit.net.br",
     "webhook_id": "e944e55d-b7d1-4dae-a4ee-af47eb84b3ab",
-    "token": "api_xkGNK0CteUznw1ItoZY0kn1gbN0Arx8RC4vqPbgXDDw"
+    "token": "api_xkGNK0CteUznw1ItoZY0kn1gbN0Arx8RC4vqPbgXDDw",
+    "insecure_skip_verify": true
   },
   "ia": {
     "chatvolt": {
