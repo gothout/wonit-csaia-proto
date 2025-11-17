@@ -1,30 +1,48 @@
 package model
 
-// InboundWebhook representa o payload recebido do CSA.
+// InboundWebhook representa o payload recebido do CSA/Gupshup.
 type InboundWebhook struct {
-	Event     string         `json:"event,omitempty"`
-	Timestamp int64          `json:"timestamp,omitempty"`
-	Message   InboundMessage `json:"message"`
-	Contact   Contact        `json:"contact"`
-	Metadata  map[string]any `json:"metadata,omitempty"`
+	Channel           string            `json:"channel"`
+	Event             string            `json:"event"`
+	PlatformMessageID string            `json:"platformMessageId"`
+	PlatformID        string            `json:"platformId"`
+	From              string            `json:"from"`
+	To                string            `json:"to"`
+	Type              string            `json:"type"`
+	MessageText       string            `json:"messageText"`
+	Timestamp         int64             `json:"timestamp"`
+	RawPayload        map[string]any    `json:"rawPayload,omitempty"`
+	RawContact        map[string]string `json:"contact,omitempty"`
 }
 
-// InboundMessage traz o conteúdo textual ou multimídia.
-type InboundMessage struct {
-	ID        string `json:"id,omitempty"`
-	Type      string `json:"type"`
-	Text      string `json:"text,omitempty"`
-	Caption   string `json:"caption,omitempty"`
-	URL       string `json:"url,omitempty"`
-	Filename  string `json:"filename,omitempty"`
-	Latitude  string `json:"latitude,omitempty"`
-	Longitude string `json:"longitude,omitempty"`
-	// Alguns provedores enviam o número de origem diretamente aqui.
-	From string `json:"from,omitempty"`
+// TextFromRaw tenta extrair o corpo de texto do rawPayload.
+func (i InboundWebhook) TextFromRaw() string {
+	if i.RawPayload == nil {
+		return ""
+	}
+
+	if text, ok := i.RawPayload["text"].(map[string]any); ok {
+		if body, ok := text["body"].(string); ok {
+			return body
+		}
+	}
+
+	if caption, ok := i.RawPayload["caption"].(string); ok {
+		return caption
+	}
+
+	return ""
 }
 
-// Contact representa quem enviou a mensagem.
-type Contact struct {
-	Phone string `json:"phone"`
-	Name  string `json:"name,omitempty"`
+// PhoneFromRaw retorna um telefone de fallback quando o campo From não vem preenchido.
+func (i InboundWebhook) PhoneFromRaw() string {
+	if i.RawPayload == nil {
+		return ""
+	}
+
+	if from, ok := i.RawPayload["from"].(string); ok {
+		return from
+	}
+
+	return ""
 }

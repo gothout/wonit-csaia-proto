@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	goqueue "github.com/gothout/goqueue"
+
 	"whatsapp-ia-integrator/internal/csa"
 )
 
@@ -16,14 +18,14 @@ type OutboxJob struct {
 	Text           string
 }
 
-// Outbox é uma fila simples de saída com workers concorrentes.
+// Outbox é uma fila de saída com workers concorrentes, apoiada pelo goqueue para armazenar mensagens.
 type Outbox struct {
 	csa     *csa.Client
 	workers int
 
-	jobs chan OutboxJob
-	wg   sync.WaitGroup
-
+	queue    *goqueue.Queue[OutboxJob]
+	notify   chan struct{}
+	wg       sync.WaitGroup
 	shutdown chan struct{}
 }
 
@@ -36,7 +38,8 @@ func NewOutbox(csaClient *csa.Client, workers int) *Outbox {
 	return &Outbox{
 		csa:      csaClient,
 		workers:  workers,
-		jobs:     make(chan OutboxJob, 100),
+		queue:    goqueue.NewQueue[OutboxJob](100),
+		notify:   make(chan struct{}, 1),
 		shutdown: make(chan struct{}),
 	}
 }
@@ -52,16 +55,20 @@ func (o *Outbox) Start() {
 // Stop sinaliza shutdown e aguarda workers terminarem.
 func (o *Outbox) Stop() {
 	close(o.shutdown)
-	close(o.jobs)
+	close(o.notify)
 	o.wg.Wait()
 }
 
 // Enqueue adiciona um job na fila.
 func (o *Outbox) Enqueue(job OutboxJob) {
-	select {
-	case o.jobs <- job:
-	default:
+	if ok := o.queue.Enqueue(job); !ok {
 		log.Printf("[outbox] fila cheia, descartando mensagem para %s", job.Phone)
+		return
+	}
+
+	select {
+	case o.notify <- struct{}{}:
+	default:
 	}
 }
 
@@ -73,27 +80,34 @@ func (o *Outbox) worker(id int) {
 		case <-o.shutdown:
 			log.Printf("[outbox-worker-%d] encerrando", id)
 			return
-		case job, ok := <-o.jobs:
+		case _, ok := <-o.notify:
 			if !ok {
 				log.Printf("[outbox-worker-%d] canal fechado", id)
 				return
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-			err := o.csa.SendMessage(ctx, &csa.SendMessageRequest{
-				Destination: job.Phone,
-				Text:        job.Text,
-				Type:        "text",
-				Preview:     true,
-			})
-			cancel()
+			for {
+				job, ok := o.queue.Dequeue()
+				if !ok {
+					break
+				}
 
-			if err != nil {
-				log.Printf("[outbox-worker-%d] erro enviando para %s (conv %s): %v", id, job.Phone, job.ConversationID, err)
-				continue
+				ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+				err := o.csa.SendMessage(ctx, &csa.SendMessageRequest{
+					Destination: job.Phone,
+					Text:        job.Text,
+					Type:        "text",
+					Preview:     true,
+				})
+				cancel()
+
+				if err != nil {
+					log.Printf("[outbox-worker-%d] erro enviando para %s (conv %s): %v", id, job.Phone, job.ConversationID, err)
+					continue
+				}
+
+				log.Printf("[outbox-worker-%d] mensagem enviada para %s (conv %s)", id, job.Phone, job.ConversationID)
 			}
-
-			log.Printf("[outbox-worker-%d] mensagem enviada para %s (conv %s)", id, job.Phone, job.ConversationID)
 		}
 	}
 }

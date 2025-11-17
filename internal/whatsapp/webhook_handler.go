@@ -38,9 +38,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	phone := strings.TrimSpace(payload.Contact.Phone)
-	if phone == "" && payload.Message.From != "" {
-		phone = payload.Message.From
+	phone := strings.TrimSpace(payload.From)
+	if phone == "" {
+		phone = strings.TrimSpace(payload.PhoneFromRaw())
+	}
+	if phone == "" && payload.RawContact != nil {
+		phone = strings.TrimSpace(payload.RawContact["phone"])
 	}
 	if phone == "" {
 		log.Printf("[webhook] payload sem telefone: %#v", payload)
@@ -48,9 +51,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	text := strings.TrimSpace(payload.Message.Text)
+	text := strings.TrimSpace(payload.MessageText)
 	if text == "" {
-		text = strings.TrimSpace(payload.Message.Caption)
+		text = strings.TrimSpace(payload.TextFromRaw())
 	}
 	if text == "" {
 		log.Printf("[webhook] mensagem sem texto ignorada: %#v", payload)
@@ -58,14 +61,18 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sess := h.sessions.Upsert(phone, payload.Contact.Name)
+	name := ""
+	if payload.RawContact != nil {
+		name = payload.RawContact["name"]
+	}
+	sess := h.sessions.Upsert(phone, name)
 
 	req := chatvolt.QueryRequest{
 		Query:          text,
 		ConversationID: sess.ConversationID,
 		VisitorID:      sess.VisitorID,
 		Contact: &chatvolt.Contact{
-			FirstName: payload.Contact.Name,
+			FirstName: name,
 			Phone:     phone,
 		},
 	}
