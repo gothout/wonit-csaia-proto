@@ -26,7 +26,7 @@ type Client struct {
 }
 
 func NewClient(cfg config.CSAConfig) *Client {
-	transport := &http.Transport{}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
 	if cfg.InsecureSkipVerify {
 		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} // nolint:gosec // configurado pelo usuário
 	}

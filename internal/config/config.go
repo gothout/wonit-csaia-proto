@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 )
 
 type ServerConfig struct {
@@ -55,6 +56,12 @@ func Load(path string) (*Config, error) {
 
 	if cfg.CSA.URL == "" {
 		cfg.CSA.URL = "https://csa.wonit.net.br"
+	}
+
+	if raw, ok := os.LookupEnv("CSA_INSECURE_SKIP_VERIFY"); ok {
+		if insecure, err := strconv.ParseBool(raw); err == nil {
+			cfg.CSA.InsecureSkipVerify = insecure
+		}
 	}
 
 	return &cfg, nil
